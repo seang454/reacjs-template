@@ -1,0 +1,68 @@
+name: Cloudflare DNS Setup
+
+on:
+  workflow_call:  # allows this to be called from other workflows
+    secrets:
+      CF_API_TOKEN:
+        required: true
+      CF_ZONE_ID:
+        required: true
+      SERVER_IP:
+        required: true
+    inputs:
+      domain:
+        required: true
+        type: string
+        description: "Base domain e.g. seang.shop"
+
+    # domain , CF_API_TOKEN, CF_ZONE_ID, SERVER_IP get value from input
+
+jobs:
+  dns-job:
+    runs-on: ubuntu-latest
+    environment: DNS_ENV
+    steps:
+      - name: Create Cloudflare DNS if not exists
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+      # run = using bash so variable like SUBDOMAIN, DOMAIN, FULL_DOMAIN can Share Across Different Jobs
+        run: |
+          SUBDOMAIN="${GITHUB_REPOSITORY##*/}"
+          DOMAIN="${{ inputs.domain }}"
+          FULL_DOMAIN="$SUBDOMAIN.$DOMAIN"
+
+          echo "Checking DNS for: $FULL_DOMAIN"
+
+          # ✅ Check if exists
+          RESPONSE=$(curl -s -X GET \
+            "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=$FULL_DOMAIN" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json")
+
+          echo "Response: $RESPONSE"
+
+          EXISTS=$(echo "$RESPONSE" | grep -c "\"name\":\"$FULL_DOMAIN\"" || true)
+          echo "Exists count: $EXISTS"
+
+          if [ "$EXISTS" -eq "0" ]; then
+            echo "Creating DNS: $FULL_DOMAIN → $SERVER_IP"
+
+            CREATE_RESPONSE=$(curl -s -X POST \
+              "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+              -H "Authorization: Bearer $CF_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data "{
+                \"type\": \"A\",
+                \"name\": \"$SUBDOMAIN\",
+                \"content\": \"$SERVER_IP\",
+                \"ttl\": 1,
+                \"proxied\": true
+              }")
+
+            echo "Create response: $CREATE_RESPONSE"
+            echo "DNS created ✅: $FULL_DOMAIN → $SERVER_IP"
+          else
+            echo "DNS already exists ✅ Skipping..."
+          fi

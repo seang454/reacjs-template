@@ -45,6 +45,19 @@ jobs:
         run: |
           docker logout 
 # update helm repo with new image
+
+  # ✅ Step 3 - Create Cloudflare DNS
+
+  dns-job:
+    needs: ci-job
+    uses: ./.github/workflows/dns-cloudflare.yml  # ← import from file
+    secrets:
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+      SERVER_IP: ${{ secrets.SERVER_IP }}
+    with:
+      domain: "seang.shop"                         # ← pass domain as input
+
   cd-job: 
     needs: ci-job
     runs-on: ubuntu-latest 
@@ -66,7 +79,16 @@ jobs:
         run: |
           cd helm_repo/${{ env.GITOPS_REPO }}
           echo "we Update repository username/imagename "
-          yq -i ".image.repository=\"${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME}}\"" values.yaml
+
+          yq -i "
+            .image.repository = \"${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}\" |
+            .image.tag = \"${{ env.TAG }}\" |
+            .ingress.hosts[0].host = \"$FULL_DOMAIN\" |
+            .ingress.tls[0].hosts[0] = \"$FULL_DOMAIN\" |
+            .ingress.tls[0].secretName = \"$SUBDOMAIN-tls\"
+          " values.yaml
+
+
           echo "Update image tag "
           yq -i ".image.tag=\"${{ env.TAG }}\"" values.yaml
           git config --global user.email "pengseangsim210@gmail.com"
