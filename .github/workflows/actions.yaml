@@ -1,13 +1,21 @@
 # set condition for when to run the action files 
 on: 
   push: 
-    branches: ["master34"]
+    branches: ["master"]
 # build docker image , push dockerhub
 env: 
-  DOCKER_IMAGE_NAME: k8s-reactjs-dev09
-  HELM_REPO: keoKAY/first-helm-argo-repo-dev09
-jobs: 
+  DOCKER_IMAGE_NAME: reactjs-itp-gen1
+  HELM_REPO: seang454/reacjs-helm-gitops
+jobs:
+    # ✅ Run SonarQube FIRST
+  sonar-job:
+    uses: ./.github/workflows/sonar-analysis.yml
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
   ci-job: 
+    needs: sonar-job
     runs-on: ubuntu-latest 
     environment: DOCKER_ENV
     steps: 
@@ -16,6 +24,8 @@ jobs:
       - name: Using Commit SHA 
         run: |
           echo "TAG=${GITHUB_SHA::8}" >> $GITHUB_ENV
+# GITHUB_SHA : This variable contains the full commit SHA hash that triggered the workflow.
+# ${GITHUB_SHA::8} : This is Bash substring syntax.It takes the first 8 characters of the commit SHA.
       - name: Show the SHA values 
         run: |
           echo "TAG = ${{env.TAG }}"
@@ -57,8 +67,8 @@ jobs:
           yq -i ".image.repository=\"${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME}}\"" values.yaml
           echo "Update image tag "
           yq -i ".image.tag=\"${{ env.TAG }}\"" values.yaml
-          git config --global user.email "username@example.com"
-          git config --global user.name "dummyname"
+          git config --global user.email "pengseangsim210@gmail.com"
+          git config --global user.name "seang454"
           git add . 
           git commit -m "Update helm to use image ${{ env.TAG }}"
           
