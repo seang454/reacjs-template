@@ -11,8 +11,9 @@ jobs:
   sonar-job:
     uses: ./.github/workflows/sonar-analysis.yml
     secrets:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_API_TOKEN: ${{ secrets.SONAR_API_TOKEN }}  # ← ADD THIS
       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
 
   ci-job: 
     needs: sonar-job

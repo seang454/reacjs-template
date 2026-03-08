@@ -3,7 +3,7 @@ name: SonarQube Analysis
 on:
   workflow_call:
     secrets:
-      SONAR_TOKEN:
+      SONAR_API_TOKEN:        # ← ONE TOKEN for everything
         required: true
       SONAR_HOST_URL:
         required: true
@@ -24,25 +24,17 @@ jobs:
           PROJECT_KEY="${GITHUB_REPOSITORY##*/}"
           echo "Checking project: $PROJECT_KEY"
 
-          # Check if project exists
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -u "${{ secrets.SONAR_TOKEN }}:" \
-            "${{ secrets.SONAR_HOST_URL }}/api/projects/search?projects=$PROJECT_KEY")
-
-          echo "Status code: $STATUS"
-
-          # Search for project
           EXISTS=$(curl -s \
-            -u "${{ secrets.SONAR_TOKEN }}:" \
+            -u "${{ secrets.SONAR_API_TOKEN }}:" \
             "${{ secrets.SONAR_HOST_URL }}/api/projects/search?projects=$PROJECT_KEY" \
             | grep -c "\"key\":\"$PROJECT_KEY\"")
 
           echo "Project exists count: $EXISTS"
 
           if [ "$EXISTS" -eq "0" ]; then
-            echo "Project not found! Creating project: $PROJECT_KEY"
+            echo "Project not found! Creating: $PROJECT_KEY"
             curl -s -X POST \
-              -u "${{ secrets.SONAR_TOKEN }}:" \
+              -u "${{ secrets.SONAR_API_TOKEN }}:" \
               "${{ secrets.SONAR_HOST_URL }}/api/projects/create" \
               -d "name=$PROJECT_KEY&project=$PROJECT_KEY&mainBranch=master"
             echo "Project created ✅"
@@ -57,18 +49,17 @@ jobs:
           echo "sonar.projectKey=$PROJECT_KEY" > sonar-project.properties
           echo "sonar.projectName=$PROJECT_KEY" >> sonar-project.properties
           echo "sonar.sources=." >> sonar-project.properties
-          echo "Created sonar-project.properties with key: $PROJECT_KEY"
           cat sonar-project.properties
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@master
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_API_TOKEN }}      # ← same token
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
       - name: SonarQube Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@master
         timeout-minutes: 5
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_API_TOKEN }}      # ← same token
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
