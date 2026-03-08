@@ -8,8 +8,30 @@ env:
   HELM_REPO: seang454/reacjs-helm-gitops
   GITOPS_REPO: reactjs-helm
 jobs:
+
+  # ✅ Step 0 - Set Domain FIRST
+  # using GITHUB_OUTPUT
+#   GITHUB_OUTPUT is a Special File in GitHub Actions
+# It's a file that GitHub provides to store values and share them between jobs.
+  setup-job:
+    runs-on: ubuntu-latest
+    outputs:
+      full_domain: ${{ steps.set_domain.outputs.full_domain }}
+      subdomain: ${{ steps.set_domain.outputs.subdomain }}
+    steps:
+      - name: Set Domain
+        id: set_domain
+        run: |
+          SUBDOMAIN="${GITHUB_REPOSITORY##*/}"
+          FULL_DOMAIN="$SUBDOMAIN.seang.shop"
+          echo "SUBDOMAIN   = $SUBDOMAIN"
+          echo "FULL_DOMAIN = $FULL_DOMAIN"
+          echo "subdomain=$SUBDOMAIN" >> $GITHUB_OUTPUT    # ← send
+          echo "full_domain=$FULL_DOMAIN" >> $GITHUB_OUTPUT # ← send
+
     # ✅ Run SonarQube FIRST
   sonar-job:
+    needs: setup-job        
     uses: ./.github/workflows/sonar-analysis.yml
     secrets:
       SONAR_API_TOKEN: ${{ secrets.SONAR_API_TOKEN }}  
@@ -49,7 +71,7 @@ jobs:
   # ✅ Step 3 - Create Cloudflare DNS
 
   dns-job:
-    needs: ci-job
+    needs: [setup-job, ci-job]
     uses: ./.github/workflows/dns-cloudflare.yml  # ← import from file
     secrets:
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
@@ -57,9 +79,10 @@ jobs:
       SERVER_IP: ${{ secrets.SERVER_IP }}
     with:
       domain: "seang.shop"                         # ← pass domain as input
+      subdomain: ${{ needs.setup-job.outputs.subdomain }}
 
   cd-job: 
-    needs: ci-job
+    needs: [setup-job, ci-job, dns-job]  # ← needs setup-job
     runs-on: ubuntu-latest 
     environment: HELM_ENV
     steps: 
@@ -75,7 +98,12 @@ jobs:
       - name: Clone argocd repo 
         run: | 
           git clone https://github.com/${{ env.HELM_REPO }} helm_repo 
-      - name: Update Helm Chart 
+      - name: Update Helm Chart
+        env:
+          # ✅ CORRECT - step-level env CAN use needs.outputs
+          GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
+          FULL_DOMAIN: ${{ needs.setup-job.outputs.full_domain }}
+          SUBDOMAIN: ${{ needs.setup-job.outputs.subdomain }} 
         run: |
           cd helm_repo/${{ env.GITOPS_REPO }}
           echo "we Update repository username/imagename "
@@ -88,9 +116,6 @@ jobs:
             .ingress.tls[0].secretName = \"$SUBDOMAIN-tls\"
           " values.yaml
 
-
-          echo "Update image tag "
-          yq -i ".image.tag=\"${{ env.TAG }}\"" values.yaml
           git config --global user.email "pengseangsim210@gmail.com"
           git config --global user.name "seang454"
           git add . 

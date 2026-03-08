@@ -1,7 +1,7 @@
 name: Cloudflare DNS Setup
 
 on:
-  workflow_call:  # allows this to be called from other workflows
+  workflow_call:
     secrets:
       CF_API_TOKEN:
         required: true
@@ -14,8 +14,11 @@ on:
         required: true
         type: string
         description: "Base domain e.g. seang.shop"
-
-    # domain , CF_API_TOKEN, CF_ZONE_ID, SERVER_IP get value from input
+      # ✅ ADD THIS - receive subdomain from caller
+      subdomain:
+        required: false
+        type: string
+        description: "Subdomain e.g. reactjs-itp-gen1"
 
 jobs:
   dns-job:
@@ -27,15 +30,21 @@ jobs:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
           SERVER_IP: ${{ secrets.SERVER_IP }}
-      # run = using bash so variable like SUBDOMAIN, DOMAIN, FULL_DOMAIN can Share Across Different Jobs
         run: |
-          SUBDOMAIN="${GITHUB_REPOSITORY##*/}"
+          # ✅ Use input if provided, otherwise get from repo name
+          if [ -n "${{ inputs.subdomain }}" ]; then
+            SUBDOMAIN="${{ inputs.subdomain }}"
+          else
+            SUBDOMAIN="${GITHUB_REPOSITORY##*/}"
+          fi
+
           DOMAIN="${{ inputs.domain }}"
           FULL_DOMAIN="$SUBDOMAIN.$DOMAIN"
 
+          echo "SUBDOMAIN   = $SUBDOMAIN"
+          echo "FULL_DOMAIN = $FULL_DOMAIN"
           echo "Checking DNS for: $FULL_DOMAIN"
 
-          # ✅ Check if exists
           RESPONSE=$(curl -s -X GET \
             "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=$FULL_DOMAIN" \
             -H "Authorization: Bearer $CF_API_TOKEN" \
@@ -62,26 +71,34 @@ jobs:
               }")
 
             echo "Create response: $CREATE_RESPONSE"
+
+            SUCCESS=$(echo "$CREATE_RESPONSE" | grep -c "\"success\":true" || true)
+            if [ "$SUCCESS" -eq "0" ]; then
+              echo "❌ Failed to create DNS!"
+              exit 1
+            fi
             echo "DNS created ✅: $FULL_DOMAIN → $SERVER_IP"
           else
             echo "DNS already exists ✅ Skipping..."
           fi
 
-            # ✅ Verify DNS record is active
-            
       - name: Verify DNS Record
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
         run: |
-          SUBDOMAIN="${GITHUB_REPOSITORY##*/}"
+          if [ -n "${{ inputs.subdomain }}" ]; then
+            SUBDOMAIN="${{ inputs.subdomain }}"
+          else
+            SUBDOMAIN="${GITHUB_REPOSITORY##*/}"
+          fi
+
           FULL_DOMAIN="$SUBDOMAIN.${{ inputs.domain }}"
+          echo "Verifying DNS for: $FULL_DOMAIN"
 
-          echo "Verifying DNS record for: $FULL_DOMAIN"
-
-          # ✅ Retry up to 5 times
           MAX_RETRIES=5
           COUNT=0
+          FOUND=0
 
           while [ $COUNT -lt $MAX_RETRIES ]; do
             VERIFY=$(curl -s -X GET \
@@ -102,6 +119,6 @@ jobs:
           done
 
           if [ "$FOUND" -eq "0" ]; then
-            echo "❌ DNS verification failed after $MAX_RETRIES retries!"
+            echo "❌ DNS verification failed!"
             exit 1
           fi
