@@ -2,7 +2,7 @@
 # set condition for when to run the action files 
 on: 
   push: 
-    branches: ["master"]
+    branches: ["non-existing-branch"]
 # build docker image , push dockerhub
 env: 
   DOCKER_IMAGE_NAME: k8s-reactjs-itp-gen1
