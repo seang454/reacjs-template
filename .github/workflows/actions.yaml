@@ -6,6 +6,7 @@ on:
 env: 
   DOCKER_IMAGE_NAME: reactjs-itp-gen1
   HELM_REPO: seang454/reacjs-helm-gitops
+  GITOPS_REPO: reactjs-helm
 jobs:
     # ✅ Run SonarQube FIRST
   sonar-job:
@@ -63,7 +64,7 @@ jobs:
           git clone https://github.com/${{ env.HELM_REPO }} helm_repo 
       - name: Update Helm Chart 
         run: |
-          cd helm_repo/reactjs-plants-chart
+          cd helm_repo/${{ env.GITOPS_REPO }}
           echo "we Update repository username/imagename "
           yq -i ".image.repository=\"${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME}}\"" values.yaml
           echo "Update image tag "
