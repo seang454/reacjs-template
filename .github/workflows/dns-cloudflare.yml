@@ -66,3 +66,42 @@ jobs:
           else
             echo "DNS already exists ✅ Skipping..."
           fi
+
+            # ✅ Verify DNS record is active
+            
+      - name: Verify DNS Record
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+        run: |
+          SUBDOMAIN="${GITHUB_REPOSITORY##*/}"
+          FULL_DOMAIN="$SUBDOMAIN.${{ inputs.domain }}"
+
+          echo "Verifying DNS record for: $FULL_DOMAIN"
+
+          # ✅ Retry up to 5 times
+          MAX_RETRIES=5
+          COUNT=0
+
+          while [ $COUNT -lt $MAX_RETRIES ]; do
+            VERIFY=$(curl -s -X GET \
+              "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=$FULL_DOMAIN" \
+              -H "Authorization: Bearer $CF_API_TOKEN" \
+              -H "Content-Type: application/json")
+
+            FOUND=$(echo "$VERIFY" | grep -c "\"name\":\"$FULL_DOMAIN\"" || true)
+
+            if [ "$FOUND" -gt "0" ]; then
+              echo "✅ DNS verified: $FULL_DOMAIN is active!"
+              break
+            fi
+
+            COUNT=$((COUNT + 1))
+            echo "Retry $COUNT/$MAX_RETRIES - waiting 10 seconds..."
+            sleep 10
+          done
+
+          if [ "$FOUND" -eq "0" ]; then
+            echo "❌ DNS verification failed after $MAX_RETRIES retries!"
+            exit 1
+          fi
