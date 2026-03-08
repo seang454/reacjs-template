@@ -1,7 +1,7 @@
 name: SonarQube Analysis
 
 on:
-  workflow_call:  # allows this to be called from other workflows
+  workflow_call:
     secrets:
       SONAR_TOKEN:
         required: true
@@ -16,7 +16,49 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # full history for better analysis
+          fetch-depth: 0
+
+      # ✅ Check if project exists, if not create it
+      - name: Create SonarQube Project if not exists
+        run: |
+          PROJECT_KEY="${GITHUB_REPOSITORY##*/}"
+          echo "Checking project: $PROJECT_KEY"
+
+          # Check if project exists
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -u "${{ secrets.SONAR_TOKEN }}:" \
+            "${{ secrets.SONAR_HOST_URL }}/api/projects/search?projects=$PROJECT_KEY")
+
+          echo "Status code: $STATUS"
+
+          # Search for project
+          EXISTS=$(curl -s \
+            -u "${{ secrets.SONAR_TOKEN }}:" \
+            "${{ secrets.SONAR_HOST_URL }}/api/projects/search?projects=$PROJECT_KEY" \
+            | grep -c "\"key\":\"$PROJECT_KEY\"")
+
+          echo "Project exists count: $EXISTS"
+
+          if [ "$EXISTS" -eq "0" ]; then
+            echo "Project not found! Creating project: $PROJECT_KEY"
+            curl -s -X POST \
+              -u "${{ secrets.SONAR_TOKEN }}:" \
+              "${{ secrets.SONAR_HOST_URL }}/api/projects/create" \
+              -d "name=$PROJECT_KEY&project=$PROJECT_KEY&mainBranch=master"
+            echo "Project created ✅"
+          else
+            echo "Project already exists ✅"
+          fi
+
+      # ✅ Create sonar-project.properties dynamically
+      - name: Create sonar-project.properties
+        run: |
+          PROJECT_KEY="${GITHUB_REPOSITORY##*/}"
+          echo "sonar.projectKey=$PROJECT_KEY" > sonar-project.properties
+          echo "sonar.projectName=$PROJECT_KEY" >> sonar-project.properties
+          echo "sonar.sources=." >> sonar-project.properties
+          echo "Created sonar-project.properties with key: $PROJECT_KEY"
+          cat sonar-project.properties
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@master
