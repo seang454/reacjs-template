@@ -7,11 +7,11 @@ on:
         required: true
       SONAR_HOST_URL:
         required: true
-    environment: SONAR_ENV
 
 jobs:
   sonar-job:
     runs-on: ubuntu-latest
+    environment: SONAR_ENV
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
