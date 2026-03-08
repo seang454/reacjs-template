@@ -56,14 +56,14 @@ jobs:
         run: |
           echo "TAG=${GITHUB_SHA::8}" >> $GITHUB_ENV
       
-      # clone the helm repo remporarily 
+      # we clone the helm repo remporarily 
       - name: Clone argocd repo 
         run: | 
           git clone https://github.com/${{ env.HELM_REPO }} helm_repo 
       - name: Update Helm Chart 
         run: |
           cd helm_repo/reactjs-plants-chart
-          echo "Update repository username/imagename "
+          echo "we Update repository username/imagename "
           yq -i ".image.repository=\"${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME}}\"" values.yaml
           echo "Update image tag "
           yq -i ".image.tag=\"${{ env.TAG }}\"" values.yaml
